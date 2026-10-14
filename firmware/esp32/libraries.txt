@@ -1,0 +1,4 @@
+# Bibliotecas para o Wokwi no navegador (aba Library Manager)
+PubSubClient
+ArduinoJson
+DHT sensor library for ESPx
