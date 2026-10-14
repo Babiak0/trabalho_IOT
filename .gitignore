@@ -1,4 +1,6 @@
-.venv/
-__pycache__/
-*.pyc
-data/
+.env
+*.pdf
+/server
+/simulator
+firmware/esp32/.pio/
+firmware/esp32/include/secrets.h
