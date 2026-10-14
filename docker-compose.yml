@@ -1,0 +1,75 @@
+# Ambiente completo: PostgreSQL + broker Mosquitto + back-end Go.
+#   docker compose up -d --build             sobe tudo
+#   docker compose --profile sim up -d       sobe também o ESP32 simulado
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: iot
+      POSTGRES_USER: iot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iot -d iot"]
+      interval: 5s
+      retries: 10
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/mosquitto/config/entrypoint.sh"]
+    environment:
+      MQTT_BACKEND_PASSWORD: ${MQTT_BACKEND_PASSWORD:?defina MQTT_BACKEND_PASSWORD no .env}
+      MQTT_DEVICES: ${MQTT_DEVICES:-}
+    volumes:
+      - ./mosquitto:/mosquitto/config:ro
+      - mqttdata:/mosquitto/data
+    ports:
+      - "1883:1883"
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgres://iot:${POSTGRES_PASSWORD}@postgres:5432/iot?sslmode=disable
+      MQTT_URL: ${MQTT_URL:-tcp://mosquitto:1883}
+      MQTT_USERNAME: ${MQTT_USERNAME:-backend}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-${MQTT_BACKEND_PASSWORD}}
+      MQTT_TOPIC_PREFIX: ambiente
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      DASHBOARD_USER: ${DASHBOARD_USER:-}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-}
+      ALERT_SAMPLES: ${ALERT_SAMPLES:-3}
+      ALERT_REMINDER: ${ALERT_REMINDER:-5m}
+      DEVICE_STALE_AFTER: ${DEVICE_STALE_AFTER:-30s}
+      TZ: America/Sao_Paulo
+    ports:
+      - "8080:8080"
+
+  simulator:
+    profiles: ["sim"]
+    build: .
+    entrypoint: ["/simulator"]
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    depends_on: [mosquitto]
+    environment:
+      MQTT_URL: ${MQTT_URL:-tcp://mosquitto:1883}
+      SIM_DEVICE: esp32-sim-01
+      SIM_USERNAME: esp32-sim-01
+      SIM_PASSWORD: ${SIM_PASSWORD:-}
+
+volumes:
+  pgdata:
+  mqttdata:

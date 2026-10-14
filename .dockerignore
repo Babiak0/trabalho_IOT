@@ -1,0 +1,5 @@
+.git
+.env
+firmware
+docs
+*.pdf

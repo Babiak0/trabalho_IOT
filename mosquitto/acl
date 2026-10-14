@@ -1,0 +1,10 @@
+# Back-end: acesso total ao prefixo da aplicação.
+user backend
+topic readwrite ambiente/#
+
+# Cada dispositivo (usuário MQTT = id do dispositivo) só acessa os próprios tópicos.
+pattern write ambiente/%u/telemetry
+pattern write ambiente/%u/status
+pattern write ambiente/%u/ack
+pattern read ambiente/%u/cmd
+pattern read ambiente/%u/config
