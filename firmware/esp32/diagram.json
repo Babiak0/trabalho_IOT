@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "author": "Ambiente Monitorado",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-dht22", "id": "dht", "top": -48, "left": 220, "attrs": { "temperature": "24", "humidity": "50" } },
+    { "type": "wokwi-led", "id": "fan", "top": 140, "left": 250, "attrs": { "color": "green", "label": "Ventilação" } },
+    { "type": "wokwi-resistor", "id": "r1", "top": 120, "left": 170, "attrs": { "value": "220" } },
+    { "type": "wokwi-led", "id": "alarm", "top": 140, "left": 320, "attrs": { "color": "red", "label": "Alarme" } },
+    { "type": "wokwi-resistor", "id": "r2", "top": 180, "left": 170, "attrs": { "value": "220" } }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    [ "dht:VCC", "esp:3V3", "red", [] ],
+    [ "dht:GND", "esp:GND.2", "black", [] ],
+    [ "dht:SDA", "esp:4", "green", [] ],
+    [ "esp:18", "r1:1", "green", [] ],
+    [ "r1:2", "fan:A", "green", [] ],
+    [ "fan:C", "esp:GND.2", "black", [] ],
+    [ "esp:19", "r2:1", "orange", [] ],
+    [ "r2:2", "alarm:A", "orange", [] ],
+    [ "alarm:C", "esp:GND.2", "black", [] ]
+  ],
+  "dependencies": {}
+}
