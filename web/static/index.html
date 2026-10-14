@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ambiente Monitorado</title>
+<style>
+:root{--ink:#16324f;--muted:#62748a;--line:#dce6ee;--teal:#087e8b;--bg:#f3f7fa;--warm:#c76128;--red:#b8412b;--green:#28a576;--card:#fff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,sans-serif}
+header{background:var(--card);border-bottom:1px solid var(--line)}
+.wrap{max-width:1180px;margin:auto;padding:22px}
+header .wrap{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{font-size:22px;font-weight:750;letter-spacing:-.6px}.brand i{color:var(--teal);font-style:normal}
+.small{font-size:13px;color:var(--muted)}
+.badges{display:flex;gap:8px;flex-wrap:wrap}
+.badge{background:#eef3f6;color:var(--muted);border-radius:20px;padding:6px 12px;font-size:12px;font-weight:650}
+.badge.ok{background:#e4f3ee;color:#167553}.badge.bad{background:#fbece7;color:var(--red)}
+.toolbar{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap;margin:4px 0 20px}
+h1{font-size:26px;margin:0;letter-spacing:-.6px}h2{font-size:16px;margin:0 0 12px}p{margin:0}
+select,input{padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;color:var(--ink);background:#fff}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;min-width:0}
+.metric{font-size:34px;font-weight:750;letter-spacing:-1px;margin:6px 0 2px}.unit{font-size:17px;color:var(--muted);font-weight:400}
+.metric.text{font-size:21px}
+.grid{display:grid;grid-template-columns:1.7fr 1fr;gap:14px;margin-top:14px}.wide{grid-column:1/-1}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+button,.button{border:0;border-radius:8px;background:var(--teal);color:#fff;padding:10px 14px;cursor:pointer;text-decoration:none;display:inline-block;font:600 13px system-ui,sans-serif}
+button.secondary,.button.secondary{background:#e9f0f4;color:var(--ink)}button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #51c7d3;outline-offset:2px}
+.controls{display:flex;gap:8px;margin:12px 0}
+.lamp{width:12px;height:12px;background:#8999a8;border-radius:50%;display:inline-block;margin-right:8px;vertical-align:middle}.lamp.on{background:var(--green);box-shadow:0 0 0 5px #28a57620}
+.off{color:var(--red)}.warn{color:var(--warm)}
+.list{display:flex;flex-direction:column;gap:8px;max-height:330px;overflow:auto}
+.alert{border-left:3px solid var(--muted);padding:8px 12px;background:#f6f8fa;border-radius:4px}
+.alert.critical{border-color:var(--red);background:#fdf1ee}.alert.warning{border-color:var(--warm);background:#fff7ee}.alert.info{border-color:var(--green);background:#eef8f3}
+.alert p{font-size:13px}.empty{padding:14px 0;color:var(--muted);font-size:13px}
+.limits{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin:10px 0}
+.limits label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+svg{display:block;width:100%;height:170px}
+.charts{display:grid;gap:6px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}td,th{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line);white-space:nowrap}th{color:var(--muted);font-weight:500}
+.scroll{overflow-x:auto}
+.sla{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.sla div{background:#f6f9fb;border-radius:10px;padding:10px}.sla b{display:block;font-size:19px}
+#feedback{min-height:20px;font-size:13px;color:var(--teal)}#feedback.error{color:var(--red)}
+#api-error{background:#fdf1ee;color:var(--red);padding:10px 14px;border-radius:8px;margin-bottom:14px}
+.tag{font-size:11px;background:#eef3f6;border-radius:6px;padding:2px 6px;margin-left:6px;color:var(--muted)}
+.footer{font-size:12px;color:var(--muted);padding:18px 0}
+@media(max-width:900px){.metrics{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}.sla{grid-template-columns:1fr 1fr}}
+@media(max-width:460px){.metrics{grid-template-columns:1fr}.metric{font-size:28px}.wrap{padding:16px}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <div><div class="brand">Ambiente Monitorado<i>.</i></div><p class="small">Temperatura e umidade em tempo real · ESP32 + MQTT + Go + PostgreSQL</p></div>
+  <div class="badges"><span class="badge" id="broker">Broker…</span><span class="badge" id="telegram">Telegram…</span></div>
+</div></header>
+
+<main class="wrap">
+<div id="api-error" hidden role="alert">Sem resposta do servidor. Os valores exibidos podem estar desatualizados.</div>
+
+<div class="toolbar">
+  <div><h1 id="device-name">Aguardando dispositivos…</h1><p class="small" id="device-id">Ligue o ESP32 ou o simulador para começar.</p></div>
+  <div class="row">
+    <label class="small">Dispositivo <select id="device"></select></label>
+    <label class="small">Período <select id="range"><option value="15">15 min</option><option value="60" selected>1 hora</option><option value="360">6 horas</option><option value="1440">24 horas</option></select></label>
+    <a class="button secondary" id="csv" href="#">Exportar CSV</a>
+  </div>
+</div>
+
+<div class="metrics">
+  <section class="card"><p class="small">Temperatura (média móvel)</p><div class="metric"><span id="temperature">--</span> <span class="unit">°C</span></div><p class="small" id="temperature-state">—</p></section>
+  <section class="card"><p class="small">Umidade (média móvel)</p><div class="metric"><span id="humidity">--</span> <span class="unit">%</span></div><p class="small" id="humidity-state">—</p></section>
+  <section class="card"><p class="small">Dispositivo</p><div class="metric text" id="status">—</div><p class="small" id="last-seen">—</p></section>
+  <section class="card"><p class="small">Ventilação (atuador)</p><div class="metric text"><span class="lamp" id="lamp"></span><span id="actuator">—</span></div><p class="small" id="edge">—</p></section>
+</div>
+
+<div class="grid">
+  <section class="card">
+    <div class="row"><h2>Histórico</h2><span class="small" id="history-count"></span></div>
+    <div class="charts"><svg id="chart-t" role="img" aria-label="Gráfico de temperatura"></svg><svg id="chart-h" role="img" aria-label="Gráfico de umidade"></svg></div>
+    <p class="small">Faixa sombreada = limites configurados. Valores já filtrados na borda (ESP32).</p>
+  </section>
+
+  <section class="card">
+    <h2>Controle remoto</h2>
+    <p class="small">O comando vai pela nuvem até o ESP32 (MQTT QoS 1), e ele confirma a execução.</p>
+    <div class="controls"><button id="on" type="button">Ligar ventilação</button><button id="off" class="secondary" type="button">Desligar</button></div>
+    <div id="feedback" role="status" aria-live="polite"></div>
+    <div class="list" id="commands"></div>
+    <h2 style="margin-top:18px">Limites de alerta</h2>
+    <form id="limits-form">
+      <div class="limits">
+        <label>Temperatura mínima (°C)<input id="temp_min" type="number" step="0.1" required></label>
+        <label>Temperatura máxima (°C)<input id="temp_max" type="number" step="0.1" required></label>
+        <label>Umidade mínima (%)<input id="hum_min" type="number" step="0.1" required></label>
+        <label>Umidade máxima (%)<input id="hum_max" type="number" step="0.1" required></label>
+      </div>
+      <button>Salvar limites</button>
+    </form>
+    <p class="small" style="margin-top:8px">Os limites também são enviados ao ESP32, que acende o alarme local e liga a ventilação sozinho se perder a conexão.</p>
+  </section>
+
+  <section class="card">
+    <div class="row"><h2>Alertas</h2><span class="small">Últimos 20</span></div>
+    <div class="list" id="alerts"></div>
+  </section>
+
+  <section class="card">
+    <div class="row"><h2>Indicadores de SLA</h2><span class="small">Últimas 24 h</span></div>
+    <div class="sla" id="sla"></div>
+  </section>
+
+  <section class="card wide">
+    <h2>Últimas leituras</h2>
+    <div class="scroll"><table><thead><tr><th>Recebida</th><th>Temp. média</th><th>Temp. bruta</th><th>Umid. média</th><th>Umid. bruta</th><th>Atuador</th><th>Borda</th></tr></thead><tbody id="readings"></tbody></table></div>
+  </section>
+</div>
+<p class="footer">Projeto acadêmico · Arquitetura de Sistemas IoT e Computação em Nuvem</p>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = (v, d = 1) => v == null ? '--' : Number(v).toLocaleString('pt-BR', {minimumFractionDigits: d, maximumFractionDigits: d});
+const time = v => new Date(v).toLocaleTimeString('pt-BR');
+const ago = v => { const s = Math.round((Date.now() - new Date(v)) / 1000); return s < 60 ? `há ${s}s` : s < 3600 ? `há ${Math.round(s/60)} min` : new Date(v).toLocaleString('pt-BR'); };
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+
+let selected = localStorage.getItem('device') || '';
+let overview = null, limitsLoadedFor = null, readings = [];
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, {cache: 'no-store', ...opts, headers: {'Content-Type': 'application/json', ...(opts.headers || {})}});
+  const body = r.headers.get('content-type')?.includes('json') ? await r.json() : null;
+  if (!r.ok) throw Error(body?.error || `Erro ${r.status}`);
+  return body;
+}
+function feedback(text, error = false) { $('feedback').textContent = text; $('feedback').className = error ? 'error' : ''; }
+const device = () => overview?.devices.find(d => d.id === selected);
+
+async function loadOverview() {
+  try {
+    overview = await api('/api/overview');
+    $('api-error').hidden = true;
+  } catch { $('api-error').hidden = false; return; }
+  const sel = $('device');
+  if (!overview.devices.some(d => d.id === selected)) selected = overview.devices[0]?.id || '';
+  sel.replaceChildren(...overview.devices.map(d => { const o = el('option', null, `${d.name}${d.online ? '' : ' (offline)'}`); o.value = d.id; return o; }));
+  sel.value = selected;
+  renderOverview();
+}
+
+function renderOverview() {
+  $('broker').textContent = overview.broker_connected ? 'Broker conectado' : 'Broker: ' + (overview.broker_error || 'desconectado');
+  $('broker').className = 'badge ' + (overview.broker_connected ? 'ok' : 'bad');
+  $('telegram').textContent = overview.telegram_enabled ? 'Telegram ativo' : 'Telegram desativado';
+  $('telegram').className = 'badge ' + (overview.telegram_enabled ? 'ok' : '');
+  const d = device();
+  $('on').disabled = $('off').disabled = !d || !d.online || !overview.broker_connected;
+  if (!d) return;
+  $('device-name').textContent = d.name;
+  $('device-id').textContent = `id: ${d.id}`;
+  $('csv').href = `/api/devices/${encodeURIComponent(d.id)}/readings.csv`;
+  const r = d.latest, l = d.limits, active = new Set(d.active_alerts);
+  $('temperature').textContent = fmt(r?.temperature);
+  $('humidity').textContent = fmt(r?.humidity);
+  const state = (key, hi, lo, min, max, unit) => active.has(hi) ? ['Acima do limite!', 'off'] : active.has(lo) ? ['Abaixo do limite!', 'off'] : r ? [`Faixa: ${fmt(min)} a ${fmt(max)} ${unit}`, ''] : ['Aguardando leitura', ''];
+  for (const [id, s] of [['temperature-state', state('t', 'temperature_high', 'temperature_low', l.temp_min, l.temp_max, '°C')], ['humidity-state', state('h', 'humidity_high', 'humidity_low', l.hum_min, l.hum_max, '%')]]) {
+    $(id).textContent = s[0]; $(id).className = 'small ' + s[1];
+  }
+  $('status').textContent = d.online ? 'Online' : 'Offline';
+  $('status').className = 'metric text ' + (d.online ? '' : 'off');
+  $('last-seen').textContent = d.last_seen_at ? `Última leitura ${ago(d.last_seen_at)}` : 'Nenhuma leitura';
+  $('actuator').textContent = d.actuator ? 'Ligada' : 'Desligada';
+  $('lamp').classList.toggle('on', d.actuator);
+  $('edge').textContent = !r ? '—' : r.edge_failsafe ? 'Modo de segurança da borda ativo' : r.edge_alarm ? 'Alarme local aceso no ESP32' : 'Estado confirmado pelo ESP32';
+  $('edge').className = 'small ' + (r?.edge_failsafe || r?.edge_alarm ? 'warn' : '');
+  if (limitsLoadedFor !== d.id) {
+    for (const k of ['temp_min', 'temp_max', 'hum_min', 'hum_max']) $(k).value = l[k];
+    limitsLoadedFor = d.id;
+  }
+}
+
+async function loadReadings() {
+  if (!selected) return;
+  try { readings = await api(`/api/devices/${encodeURIComponent(selected)}/readings?minutes=${$('range').value}`); } catch { return; }
+  const d = device();
+  $('history-count').textContent = `${readings.length} leituras`;
+  chart($('chart-t'), readings, 'temperature', '°C', '#087e8b', d && [d.limits.temp_min, d.limits.temp_max]);
+  chart($('chart-h'), readings, 'humidity', '%', '#c76128', d && [d.limits.hum_min, d.limits.hum_max]);
+  $('readings').replaceChildren(...readings.slice(-10).reverse().map(r => {
+    const tr = el('tr');
+    for (const v of [time(r.received_at), fmt(r.temperature) + ' °C', fmt(r.raw_temperature) + ' °C', fmt(r.humidity) + ' %', fmt(r.raw_humidity) + ' %', r.actuator ? 'Ligado' : 'Desligado', r.edge_failsafe ? 'Segurança' : r.edge_alarm ? 'Alarme' : 'Normal']) tr.append(el('td', null, v));
+    return tr;
+  }));
+}
+
+function chart(svg, data, key, unit, color, band) {
+  const W = 640, H = 170, L = 44, R = 10, T = 12, B = 22, ns = 'http://www.w3.org/2000/svg';
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.replaceChildren();
+  const add = (tag, attrs, text) => { const n = document.createElementNS(ns, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); if (text != null) n.textContent = text; svg.append(n); return n; };
+  if (!data.length) { add('text', {x: W/2, y: H/2, 'text-anchor': 'middle', fill: '#62748a', 'font-size': 13}, 'Sem leituras no período'); return; }
+  const vals = data.map(r => r[key]).concat(band || []);
+  let lo = Math.min(...vals), hi = Math.max(...vals); const pad = Math.max(1, (hi - lo) * 0.15); lo -= pad; hi += pad;
+  const t0 = new Date(data[0].received_at).getTime(), t1 = Math.max(t0 + 1, new Date(data.at(-1).received_at).getTime());
+  const x = t => L + (new Date(t).getTime() - t0) / (t1 - t0) * (W - L - R), y = v => T + (hi - v) / (hi - lo) * (H - T - B);
+  if (band) add('rect', {x: L, y: y(band[1]), width: W - L - R, height: Math.max(0, y(band[0]) - y(band[1])), fill: color, opacity: .07});
+  for (let i = 0; i <= 3; i++) { const v = lo + (hi - lo) * i / 3; add('line', {x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: '#e5edf3'}); add('text', {x: L - 6, y: y(v) + 4, 'text-anchor': 'end', fill: '#62748a', 'font-size': 11}, fmt(v, 0)); }
+  if (band) for (const b of band) add('line', {x1: L, x2: W - R, y1: y(b), y2: y(b), stroke: color, 'stroke-dasharray': '4 4', opacity: .6});
+  add('polyline', {points: data.map(r => `${x(r.received_at)},${y(r[key])}`).join(' '), fill: 'none', stroke: color, 'stroke-width': 2.2, 'stroke-linejoin': 'round'});
+  const last = data.at(-1); add('circle', {cx: x(last.received_at), cy: y(last[key]), r: 3.5, fill: color});
+  add('text', {x: L, y: H - 5, fill: '#62748a', 'font-size': 11}, time(data[0].received_at));
+  add('text', {x: W - R, y: H - 5, 'text-anchor': 'end', fill: '#62748a', 'font-size': 11}, time(last.received_at));
+  add('text', {x: W - R, y: T + 2, 'text-anchor': 'end', fill: color, 'font-size': 12, 'font-weight': 600}, `${key === 'temperature' ? 'Temperatura' : 'Umidade'} (${unit})`);
+}
+
+const sevLabel = {sent: 'enviado ao Telegram', pending: 'envio pendente', failed: 'falha no envio', disabled: 'somente painel'};
+async function loadAlerts() {
+  try {
+    const list = await api(`/api/alerts?limit=20${selected ? '&device=' + encodeURIComponent(selected) : ''}`);
+    $('alerts').replaceChildren(...(list.length ? list.map(a => {
+      const box = el('div', 'alert ' + a.severity); box.append(el('p', null, a.message), el('p', 'small', `${new Date(a.created_at).toLocaleString('pt-BR')} · ${sevLabel[a.notify_status] || a.notify_status}`)); return box;
+    }) : [el('p', 'empty', 'Nenhum alerta registrado.')]));
+  } catch {}
+}
+
+const cmdLabel = {pending: 'aguardando confirmação', acked: 'confirmado', acked_late: 'confirmado após o prazo', expired: 'sem confirmação', failed: 'falha ao publicar'};
+async function loadCommands() {
+  if (!selected) return;
+  try {
+    const list = await api(`/api/devices/${encodeURIComponent(selected)}/commands?limit=4`);
+    $('commands').replaceChildren(...list.map(c => {
+      const ms = c.acked_at ? ` em ${new Date(c.acked_at) - new Date(c.created_at)} ms` : '';
+      const p = el('p', 'small', `${time(c.created_at)} · ${c.action === 'on' ? 'Ligar' : 'Desligar'} · ${cmdLabel[c.status] || c.status}${ms}`);
+      p.append(el('span', 'tag', c.source)); return p;
+    }));
+  } catch {}
+}
+
+async function loadMetrics() {
+  try {
+    const m = await api('/api/metrics?window=24h');
+    const ms = v => v == null ? '--' : v < 1000 ? `${Math.round(v)} ms` : `${fmt(v / 1000)} s`;
+    const pct = v => v == null ? '--' : `${fmt(v * 100)} %`;
+    const up = s => s < 3600 ? `${Math.round(s / 60)} min` : `${fmt(s / 3600)} h`;
+    const items = [
+      ['Latência telemetria p95', ms(m.telemetry_latency.p95_ms)],
+      ['Entrega de alerta p95', ms(m.alert_delivery.p95_ms)],
+      ['Comando → confirmação p95', ms(m.command_round_trip.p95_ms)],
+      ['Comandos confirmados no prazo', pct(m.command_success_rate)],
+      ['Completude dos dados', pct(m.data_completeness)],
+      ['Back-end no ar', up(m.uptime_seconds)],
+    ];
+    $('sla').replaceChildren(...items.map(([k, v]) => { const d = el('div'); d.append(el('b', null, v), el('span', 'small', k)); return d; }));
+  } catch {}
+}
+
+async function command(action) {
+  feedback('Enviando…');
+  try { await api(`/api/devices/${encodeURIComponent(selected)}/commands`, {method: 'POST', body: JSON.stringify({action})}); feedback('Comando publicado. Aguardando confirmação do ESP32…'); }
+  catch (e) { feedback(e.message, true); }
+  loadCommands();
+}
+$('on').onclick = () => command('on');
+$('off').onclick = () => command('off');
+$('limits-form').onsubmit = async e => {
+  e.preventDefault();
+  const body = Object.fromEntries(['temp_min', 'temp_max', 'hum_min', 'hum_max'].map(k => [k, Number($(k).value)]));
+  try { await api(`/api/devices/${encodeURIComponent(selected)}/limits`, {method: 'PUT', body: JSON.stringify(body)}); feedback('Limites salvos e enviados ao dispositivo.'); limitsLoadedFor = null; await loadOverview(); loadReadings(); }
+  catch (err) { feedback(err.message, true); }
+};
+$('device').onchange = e => { selected = e.target.value; localStorage.setItem('device', selected); limitsLoadedFor = null; renderOverview(); refreshAll(); };
+$('range').onchange = loadReadings;
+
+async function refreshAll() { await loadOverview(); loadReadings(); loadAlerts(); loadCommands(); loadMetrics(); }
+refreshAll();
+setInterval(async () => { await loadOverview(); loadAlerts(); loadCommands(); }, 2000);
+setInterval(loadReadings, 5000);
+setInterval(loadMetrics, 15000);
+</script>
+</body>
+</html>
