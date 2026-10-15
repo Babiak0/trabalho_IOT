@@ -69,7 +69,7 @@ func run(cfg config.Config) error {
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.New(svc, cfg.DashboardUser, cfg.DashboardPassword),
+		Handler:           api.New(svc, cfg.DashboardUser, cfg.DashboardPassword, cfg.SessionSecret),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      60 * time.Second,
 	}

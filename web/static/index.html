@@ -15,6 +15,7 @@ header .wrap{display:flex;justify-content:space-between;align-items:center;gap:1
 .small{font-size:13px;color:var(--muted)}
 .badges{display:flex;gap:8px;flex-wrap:wrap}
 .badge{background:#eef3f6;color:var(--muted);border-radius:20px;padding:6px 12px;font-size:12px;font-weight:650}
+.logout{padding:6px 12px;border-radius:20px;font-size:12px}
 .badge.ok{background:#e4f3ee;color:#167553}.badge.bad{background:#fbece7;color:var(--red)}
 .toolbar{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap;margin:4px 0 20px}
 h1{font-size:26px;margin:0;letter-spacing:-.6px}h2{font-size:16px;margin:0 0 12px}p{margin:0}
@@ -54,7 +55,7 @@ table{width:100%;border-collapse:collapse;font-size:12.5px}td,th{text-align:left
 <body>
 <header><div class="wrap">
   <div><div class="brand">Ambiente Monitorado<i>.</i></div><p class="small">Temperatura e umidade em tempo real · ESP32 + MQTT + Go + PostgreSQL</p></div>
-  <div class="badges"><span class="badge" id="broker">Broker…</span><span class="badge" id="telegram">Telegram…</span></div>
+  <div class="badges"><span class="badge" id="broker">Broker…</span><span class="badge" id="telegram">Telegram…</span><button class="secondary logout" id="logout" type="button" hidden>Sair</button></div>
 </div></header>
 
 <main class="wrap">
@@ -133,6 +134,7 @@ let overview = null, limitsLoadedFor = null, readings = [];
 async function api(path, opts = {}) {
   const r = await fetch(path, {cache: 'no-store', ...opts, headers: {'Content-Type': 'application/json', ...(opts.headers || {})}});
   const body = r.headers.get('content-type')?.includes('json') ? await r.json() : null;
+  if (r.status === 401) { location.replace('/login'); throw Error('Sessão expirada'); }
   if (!r.ok) throw Error(body?.error || `Erro ${r.status}`);
   return body;
 }
@@ -273,6 +275,9 @@ $('limits-form').onsubmit = async e => {
 };
 $('device').onchange = e => { selected = e.target.value; localStorage.setItem('device', selected); limitsLoadedFor = null; renderOverview(); refreshAll(); };
 $('range').onchange = loadReadings;
+
+api('/api/session').then(s => { $('logout').hidden = !s.auth_enabled; }).catch(() => {});
+$('logout').onclick = async () => { try { await api('/api/logout', {method: 'POST', body: '{}'}); } finally { location.replace('/login'); } };
 
 async function refreshAll() { await loadOverview(); loadReadings(); loadAlerts(); loadCommands(); loadMetrics(); }
 refreshAll();

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Entrar · Ambiente Monitorado</title>
+<style>
+:root{--ink:#16324f;--muted:#62748a;--line:#dce6ee;--teal:#087e8b;--teal-dark:#066a75;--bg:#f3f7fa;--red:#b8412b}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,sans-serif}
+.card{width:100%;max-width:380px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:32px 28px;box-shadow:0 10px 30px #16324f0d}
+.brand{font-size:22px;font-weight:750;letter-spacing:-.6px}.brand i{color:var(--teal);font-style:normal}
+.sub{color:var(--muted);font-size:13px;margin:4px 0 26px}
+label{display:block;font-size:13px;font-weight:600;margin:0 0 6px}
+input{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:9px;font:inherit;color:var(--ink);background:#fff;margin-bottom:16px}
+input:focus{outline:3px solid #51c7d340;border-color:var(--teal)}
+button{width:100%;border:0;border-radius:9px;background:var(--teal);color:#fff;padding:12px;font:600 14px system-ui,sans-serif;cursor:pointer;margin-top:4px}
+button:hover{background:var(--teal-dark)}button:disabled{opacity:.6;cursor:wait}
+button:focus-visible{outline:3px solid #51c7d3;outline-offset:2px}
+.error{min-height:20px;color:var(--red);font-size:13px;margin-top:12px;text-align:center}
+.foot{color:var(--muted);font-size:12px;text-align:center;margin-top:22px}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--teal);margin-right:6px;vertical-align:middle}
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="brand">Ambiente Monitorado<i>.</i></div>
+  <p class="sub"><span class="dot"></span>Temperatura e umidade em tempo real</p>
+  <form id="form" novalidate>
+    <label for="user">Usuário</label>
+    <input id="user" name="user" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus>
+    <label for="password">Senha</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+    <button id="submit">Entrar</button>
+    <p class="error" id="error" role="alert" aria-live="polite"></p>
+  </form>
+  <p class="foot">Projeto acadêmico · IoT e Computação em Nuvem</p>
+</main>
+<script>
+const form = document.getElementById('form'), btn = document.getElementById('submit'), err = document.getElementById('error');
+form.onsubmit = async e => {
+  e.preventDefault();
+  const user = form.user.value.trim(), password = form.password.value;
+  if (!user || !password) { err.textContent = 'Preencha usuário e senha.'; return; }
+  btn.disabled = true; btn.textContent = 'Entrando…'; err.textContent = '';
+  try {
+    const r = await fetch('/api/login', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({user, password})});
+    if (r.ok) { location.replace('/'); return; }
+    const body = await r.json().catch(() => ({}));
+    err.textContent = body.error ? body.error.charAt(0).toUpperCase() + body.error.slice(1) + '.' : 'Não foi possível entrar.';
+    form.password.value = ''; form.password.focus();
+  } catch { err.textContent = 'Sem conexão com o servidor.'; }
+  btn.disabled = false; btn.textContent = 'Entrar';
+};
+</script>
+</body>
+</html>

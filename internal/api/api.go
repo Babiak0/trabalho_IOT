@@ -3,7 +3,6 @@ package api
 
 import (
 	"context"
-	"crypto/subtle"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
@@ -12,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/brugge-matheus/iot-aps/internal/domain"
@@ -21,14 +21,22 @@ import (
 )
 
 type API struct {
-	svc        *service.Service
-	user, pass string
+	svc  *service.Service
+	auth *auth // nil quando o login está desativado (desenvolvimento local)
 }
 
-func New(svc *service.Service, user, pass string) http.Handler {
-	a := &API{svc: svc, user: user, pass: pass}
+// New monta as rotas. Com user vazio, o painel fica aberto (uso local).
+func New(svc *service.Service, user, pass, sessionSecret string) http.Handler {
+	a := &API{svc: svc}
+	if user != "" {
+		a.auth = newAuth(user, pass, sessionSecret)
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", a.health)
+	mux.HandleFunc("GET /login", a.loginPage)
+	mux.HandleFunc("POST /api/login", a.login)
+	mux.HandleFunc("POST /api/logout", a.logout)
+	mux.HandleFunc("GET /api/session", a.session)
 	mux.HandleFunc("GET /api/overview", a.overview)
 	mux.HandleFunc("GET /api/devices/{id}/readings", a.readings)
 	mux.HandleFunc("GET /api/devices/{id}/readings.csv", a.exportCSV)
@@ -47,15 +55,6 @@ func (a *API) middleware(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		if r.URL.Path != "/healthz" && a.user != "" {
-			u, p, ok := r.BasicAuth()
-			if !ok || subtle.ConstantTimeCompare([]byte(u), []byte(a.user)) != 1 ||
-				subtle.ConstantTimeCompare([]byte(p), []byte(a.pass)) != 1 {
-				w.Header().Set("WWW-Authenticate", `Basic realm="painel", charset="UTF-8"`)
-				writeErr(w, http.StatusUnauthorized, "autenticação necessária")
-				return
-			}
-		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			// Bloqueia requisições de outros sites (CSRF) e limita o corpo.
 			if o := r.Header.Get("Origin"); o != "" {
@@ -69,6 +68,14 @@ func (a *API) middleware(next http.Handler) http.Handler {
 				return
 			}
 			r.Body = http.MaxBytesReader(w, r.Body, 4096)
+		}
+		if a.auth != nil && !publicPath(r.URL.Path) && !a.auth.authenticated(r) {
+			if strings.HasPrefix(r.URL.Path, "/api/") {
+				writeErr(w, http.StatusUnauthorized, "sessão expirada; entre novamente")
+			} else {
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+			}
+			return
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -125,6 +132,60 @@ func clamp(n, lo, hi int) int {
 		return hi
 	}
 	return n
+}
+
+// ---------- login ----------
+
+func (a *API) loginPage(w http.ResponseWriter, r *http.Request) {
+	if a.auth == nil || a.auth.authenticated(r) {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	http.ServeFileFS(w, r, web.Files, "login.html")
+}
+
+func (a *API) login(w http.ResponseWriter, r *http.Request) {
+	if a.auth == nil {
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+		return
+	}
+	ip := clientIP(r)
+	if !a.auth.allowed(ip) {
+		writeErr(w, http.StatusTooManyRequests, "muitas tentativas; aguarde alguns minutos")
+		return
+	}
+	var body struct {
+		User     string `json:"user"`
+		Password string `json:"password"`
+	}
+	if err := decode(r, &body); err != nil {
+		fail(w, err)
+		return
+	}
+	if !a.auth.checkCredentials(body.User, body.Password) {
+		a.auth.recordFailure(ip)
+		slog.Warn("login recusado", "ip", ip)
+		writeErr(w, http.StatusUnauthorized, "usuário ou senha incorretos")
+		return
+	}
+	a.auth.resetFailures(ip)
+	tok, exp := a.auth.token(body.User)
+	a.auth.setCookie(w, r, tok, exp)
+	slog.Info("login", "ip", ip)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "expires_at": exp})
+}
+
+func (a *API) logout(w http.ResponseWriter, r *http.Request) {
+	if a.auth != nil {
+		a.auth.clearCookie(w, r)
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// session informa ao painel se o login está ativo (para exibir o botão Sair).
+func (a *API) session(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]bool{"auth_enabled": a.auth != nil})
 }
 
 func (a *API) health(w http.ResponseWriter, r *http.Request) {
