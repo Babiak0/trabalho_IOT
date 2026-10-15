@@ -24,9 +24,10 @@ type Config struct {
 }
 
 type Event struct {
-	Kind     string
-	Severity string // "critical", "warning" ou "info"
-	Message  string
+	Kind      string
+	Condition string // condição afetada (ex.: temperature_high); em Normalized, a que voltou ao normal
+	Severity  string // "critical", "warning" ou "info"
+	Message   string
 }
 
 type condition struct {
@@ -120,9 +121,10 @@ func (e *Engine) Evaluate(deviceID, deviceName string, r domain.Reading, lim dom
 			cs.active = true
 			cs.lastNotified = now
 			events = append(events, Event{
-				Kind:     c.kind,
-				Severity: "critical",
-				Message:  fmt.Sprintf("%s%s em %s: %.1f %s (limite %.1f %s).", prefix, c.label, deviceName, v, c.unit, t, c.unit),
+				Kind:      c.kind,
+				Condition: c.kind,
+				Severity:  "critical",
+				Message:   fmt.Sprintf("%s%s em %s: %.1f %s (limite %.1f %s).", prefix, c.label, deviceName, v, c.unit, t, c.unit),
 			})
 			continue
 		}
@@ -135,9 +137,10 @@ func (e *Engine) Evaluate(deviceID, deviceName string, r domain.Reading, lim dom
 		if back {
 			cs.active = false
 			events = append(events, Event{
-				Kind:     domain.AlertNormalized,
-				Severity: "info",
-				Message:  fmt.Sprintf("Normalizado em %s: %s voltou para %.1f %s.", deviceName, c.metric, v, c.unit),
+				Kind:      domain.AlertNormalized,
+				Condition: c.kind,
+				Severity:  "info",
+				Message:   fmt.Sprintf("Normalizado em %s: %s voltou para %.1f %s.", deviceName, c.metric, v, c.unit),
 			})
 		}
 	}
@@ -157,6 +160,17 @@ func (e *Engine) Active(deviceID string) map[string]bool {
 		}
 	}
 	return out
+}
+
+// Restore recarrega um alerta ativo salvo no banco (após reiniciar o servidor),
+// evitando repetir a notificação antes do intervalo de lembrete.
+func (e *Engine) Restore(deviceID, kind string, lastNotified time.Time) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if cs, ok := e.state(deviceID).conds[kind]; ok {
+		cs.active = true
+		cs.lastNotified = lastNotified
+	}
 }
 
 // Reset limpa o estado do dispositivo (usado quando os limites mudam).

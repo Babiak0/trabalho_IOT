@@ -55,7 +55,10 @@ func run(cfg config.Config) error {
 		slog.Warn("Telegram desativado: defina TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID")
 	}
 
-	svc := service.New(cfg, st, bot)
+	svc, err := service.New(ctx, cfg, st, bot)
+	if err != nil {
+		return err
+	}
 	mq := broker.Connect(broker.Options{
 		URL: cfg.MQTTURL, Username: cfg.MQTTUsername, Password: cfg.MQTTPassword,
 		ClientID: cfg.MQTTClientID, Prefix: cfg.TopicPrefix,

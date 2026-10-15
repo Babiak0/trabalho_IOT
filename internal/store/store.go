@@ -326,6 +326,42 @@ func (s *Store) AlertFailed(ctx context.Context, id int64, status string, next t
 	return err
 }
 
+// ---------- estado do motor de alertas ----------
+
+type AlertState struct {
+	DeviceID     string
+	Kind         string
+	LastNotified time.Time
+}
+
+func (s *Store) SetAlertActive(ctx context.Context, deviceID, kind string, at time.Time) error {
+	_, err := s.db.Exec(ctx, `INSERT INTO alert_state(device_id, kind, last_notified_at) VALUES($1,$2,$3)
+		ON CONFLICT (device_id, kind) DO UPDATE SET last_notified_at = EXCLUDED.last_notified_at`, deviceID, kind, at)
+	return err
+}
+
+func (s *Store) ClearAlert(ctx context.Context, deviceID, kind string) error {
+	_, err := s.db.Exec(ctx, `DELETE FROM alert_state WHERE device_id=$1 AND kind=$2`, deviceID, kind)
+	return err
+}
+
+func (s *Store) ClearAlerts(ctx context.Context, deviceID string) error {
+	_, err := s.db.Exec(ctx, `DELETE FROM alert_state WHERE device_id=$1`, deviceID)
+	return err
+}
+
+func (s *Store) ActiveAlerts(ctx context.Context) ([]AlertState, error) {
+	rows, err := s.db.Query(ctx, `SELECT device_id, kind, last_notified_at FROM alert_state`)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (AlertState, error) {
+		var a AlertState
+		err := r.Scan(&a.DeviceID, &a.Kind, &a.LastNotified)
+		return a, err
+	})
+}
+
 // ---------- comandos ----------
 
 func (s *Store) InsertCommand(ctx context.Context, c domain.Command) error {

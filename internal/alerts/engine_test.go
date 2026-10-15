@@ -116,3 +116,23 @@ func TestDevicesAreIndependent(t *testing.T) {
 		t.Fatal("estado de alerta misturado entre dispositivos")
 	}
 }
+
+func TestRestoreAvoidsDuplicateAfterRestart(t *testing.T) {
+	e := newEngine()
+	now := time.Unix(1000, 0)
+	e.Restore("d1", domain.AlertTempHigh, now.Add(-10*time.Second)) // alerta enviado antes do reinício
+	if !e.Active("d1")[domain.AlertTempHigh] {
+		t.Fatal("estado restaurado deveria estar ativo")
+	}
+	for i := 0; i < 5; i++ {
+		if ev := e.Evaluate("d1", "Sala", reading(35, 50), lim, now); len(ev) != 0 {
+			t.Fatalf("alerta repetido após reinício: %v", ev)
+		}
+		now = now.Add(5 * time.Second)
+	}
+	ev := e.Evaluate("d1", "Sala", reading(25, 50), lim, now)
+	if len(ev) != 1 || ev[0].Kind != domain.AlertNormalized || ev[0].Condition != domain.AlertTempHigh {
+		t.Fatalf("esperava normalização da condição restaurada: %v", ev)
+	}
+	e.Restore("d1", "desconhecido", now) // tipo inválido é ignorado
+}
