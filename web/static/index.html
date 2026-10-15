@@ -129,6 +129,7 @@ const ago = v => { const s = Math.round((Date.now() - new Date(v)) / 1000); retu
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
 
 let selected = localStorage.getItem('device') || '';
+let pendingCmd = null; // comando aguardando confirmação, para atualizar a mensagem abaixo dos botões
 let overview = null, limitsLoadedFor = null, readings = [];
 
 async function api(path, opts = {}) {
@@ -233,6 +234,15 @@ async function loadCommands() {
   if (!selected) return;
   try {
     const list = await api(`/api/devices/${encodeURIComponent(selected)}/commands?limit=4`);
+    const mine = pendingCmd && list.find(c => c.id === pendingCmd);
+    if (mine && mine.status !== 'pending') {
+      const ms = mine.acked_at ? new Date(mine.acked_at) - new Date(mine.created_at) : 0;
+      const verb = mine.action === 'on' ? 'ligada' : 'desligada';
+      if (mine.status === 'acked') feedback(`Ventilação ${verb}: confirmado pelo ESP32 em ${ms} ms.`);
+      else if (mine.status === 'acked_late') feedback(`Ventilação ${verb}, mas a confirmação chegou após o prazo (${ms} ms).`, true);
+      else feedback('O ESP32 não confirmou o comando no prazo. Verifique se ele está online.', true);
+      pendingCmd = null;
+    }
     $('commands').replaceChildren(...list.map(c => {
       const ms = c.acked_at ? ` em ${new Date(c.acked_at) - new Date(c.created_at)} ms` : '';
       const p = el('p', 'small', `${time(c.created_at)} · ${c.action === 'on' ? 'Ligar' : 'Desligar'} · ${cmdLabel[c.status] || c.status}${ms}`);
@@ -261,8 +271,11 @@ async function loadMetrics() {
 
 async function command(action) {
   feedback('Enviando…');
-  try { await api(`/api/devices/${encodeURIComponent(selected)}/commands`, {method: 'POST', body: JSON.stringify({action})}); feedback('Comando publicado. Aguardando confirmação do ESP32…'); }
-  catch (e) { feedback(e.message, true); }
+  try {
+    const c = await api(`/api/devices/${encodeURIComponent(selected)}/commands`, {method: 'POST', body: JSON.stringify({action})});
+    pendingCmd = c.id;
+    feedback('Comando publicado. Aguardando confirmação do ESP32…');
+  } catch (e) { pendingCmd = null; feedback(e.message, true); }
   loadCommands();
 }
 $('on').onclick = () => command('on');
