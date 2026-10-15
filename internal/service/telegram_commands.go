@@ -43,6 +43,10 @@ func (s *Service) telegramCommand(ctx context.Context, cmd string, args []string
 		if cmd == "/desligar" {
 			action = domain.ActionOff
 		}
+		if dev.Actuator == (action == domain.ActionOn) {
+			estado := map[bool]string{true: "ligada", false: "desligada"}[dev.Actuator]
+			return fmt.Sprintf("A ventilação de %s já está %s.", dev.Name, estado)
+		}
 		c, err := s.SendCommand(ctx, dev.ID, action, "telegram")
 		if err != nil {
 			return "Não foi possível enviar: " + friendly(err)
