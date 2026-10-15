@@ -13,6 +13,7 @@ type Config struct {
 	DatabaseURL       string
 	DashboardUser     string
 	DashboardPassword string
+	SessionSecret     string // assina os cookies de sessão; vazio = sessões perdidas ao reiniciar
 
 	MQTTURL      string
 	MQTTUsername string
@@ -36,6 +37,7 @@ func Load() (Config, error) {
 		DatabaseURL:       env("DATABASE_URL", "postgres://iot:iot@localhost:5432/iot?sslmode=disable"),
 		DashboardUser:     env("DASHBOARD_USER", ""),
 		DashboardPassword: env("DASHBOARD_PASSWORD", ""),
+		SessionSecret:     env("SESSION_SECRET", ""),
 		MQTTURL:           env("MQTT_URL", "tcp://localhost:1883"),
 		MQTTUsername:      env("MQTT_USERNAME", ""),
 		MQTTPassword:      env("MQTT_PASSWORD", ""),
