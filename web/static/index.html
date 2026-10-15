@@ -160,7 +160,7 @@ function renderOverview() {
   $('telegram').textContent = overview.telegram_enabled ? 'Telegram ativo' : 'Telegram desativado';
   $('telegram').className = 'badge ' + (overview.telegram_enabled ? 'ok' : '');
   const d = device();
-  $('on').disabled = $('off').disabled = !d || !d.online || !overview.broker_connected;
+  updateButtons();
   if (!d) return;
   $('device-name').textContent = d.name;
   $('device-id').textContent = `id: ${d.id}`;
@@ -242,6 +242,7 @@ async function loadCommands() {
       else if (mine.status === 'acked_late') feedback(`Ventilação ${verb}, mas a confirmação chegou após o prazo (${ms} ms).`, true);
       else feedback('O ESP32 não confirmou o comando no prazo. Verifique se ele está online.', true);
       pendingCmd = null;
+      await loadOverview();
     }
     $('commands').replaceChildren(...list.map(c => {
       const ms = c.acked_at ? ` em ${new Date(c.acked_at) - new Date(c.created_at)} ms` : '';
@@ -269,13 +270,25 @@ async function loadMetrics() {
   } catch {}
 }
 
+// Só deixa clicar no botão que muda o estado: ligada → "Desligar"; desligada → "Ligar".
+// Durante um comando aguardando confirmação, os dois ficam bloqueados.
+function updateButtons() {
+  const d = device();
+  const usable = d && d.online && overview.broker_connected && !pendingCmd;
+  $('on').disabled = !usable || d.actuator;
+  $('off').disabled = !usable || !d.actuator;
+  $('on').title = d?.actuator ? 'A ventilação já está ligada' : '';
+  $('off').title = d && !d.actuator ? 'A ventilação já está desligada' : '';
+}
+
 async function command(action) {
   feedback('Enviando…');
   try {
     const c = await api(`/api/devices/${encodeURIComponent(selected)}/commands`, {method: 'POST', body: JSON.stringify({action})});
     pendingCmd = c.id;
+    updateButtons();
     feedback('Comando publicado. Aguardando confirmação do ESP32…');
-  } catch (e) { pendingCmd = null; feedback(e.message, true); }
+  } catch (e) { pendingCmd = null; feedback(e.message, true); updateButtons(); }
   loadCommands();
 }
 $('on').onclick = () => command('on');
