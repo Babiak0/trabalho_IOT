@@ -17,7 +17,7 @@ import (
 	"github.com/brugge-matheus/iot-aps/internal/domain"
 )
 
-//go:embed migrations/*.sql
+//go:embed migrations
 var migrations embed.FS
 
 var ErrNotFound = errors.New("não encontrado")
