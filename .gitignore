@@ -4,3 +4,5 @@
 /simulator
 firmware/esp32/.pio/
 firmware/esp32/include/secrets.h
+firmware/esp32/wokwi-bundle/
+.DS_Store

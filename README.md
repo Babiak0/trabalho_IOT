@@ -72,12 +72,15 @@ No Mosquitto local, cada dispositivo usa o próprio id como usuário e, pela ACL
 
 O bot envia os alertas e aceita `/status`, `/ligar`, `/desligar` e `/limites`, respondendo só ao chat configurado.
 
-## Broker na nuvem (HiveMQ Cloud, plano gratuito)
+## Broker na nuvem (HiveMQ Cloud)
 
-1. Crie um cluster *Serverless* em https://console.hivemq.cloud.
-2. Em *Access Management*, crie as credenciais `backend` e uma por dispositivo (ex.: `esp32-sala-01`).
-3. No `.env`: `MQTT_URL=tls://<cluster>.s1.eu.hivemq.cloud:8883`, `MQTT_USERNAME=backend`, `MQTT_PASSWORD=...`.
-4. No firmware (`secrets.h`): mesmo host, porta 8883, `MQTT_USE_TLS 1`.
+O plano gratuito *Serverless* do HiveMQ não aceita novos cadastros e será desligado em 31/12/2026.
+Clusters já existentes continuam funcionando até lá; alternativa gratuita equivalente: EMQX Cloud Serverless.
+
+1. No cluster, em *Access Management*, crie as credenciais `backend` e uma por dispositivo (ex.: `esp32-sala-01`),
+   todas com permissão *Publish and Subscribe*.
+2. No `.env`: `MQTT_URL=tls://<cluster>.s1.eu.hivemq.cloud:8883`, `MQTT_USERNAME=backend`, `MQTT_PASSWORD=...`.
+3. No firmware (`secrets.h`): mesmo host, porta 8883, `MQTT_USE_TLS 1`.
 
 ## ESP32
 
@@ -90,8 +93,9 @@ pio run -t upload && pio device monitor
 ```
 
 **Wokwi (simulação):** no VS Code com a extensão Wokwi, rode `pio run` e abra `diagram.json`.
-No navegador (wokwi.com → novo projeto ESP32 Arduino): cole `src/main.cpp` em `sketch.ino`, crie as abas `edge.h` e `secrets.h`,
-e use o `diagram.json` e o `libraries.txt` desta pasta. O Wokwi no navegador só alcança brokers na internet (use o HiveMQ Cloud).
+No navegador, gere um arquivo único com `./tools/bundle-wokwi.sh` (dentro de `firmware/esp32`; a saída em
+`wokwi-bundle/` fica fora do git porque contém senhas). Em wokwi.com → novo projeto ESP32 (Arduino), cole o
+`sketch.ino`, o `diagram.json` e crie a aba `libraries.txt`. O Wokwi no navegador só alcança brokers na internet.
 
 ## Processamento na borda (ESP32)
 

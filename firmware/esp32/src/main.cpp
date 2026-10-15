@@ -8,7 +8,7 @@
 // Tópicos: ambiente/<DEVICE_ID>/{telemetry,status,ack} (publica) e {cmd,config} (assina).
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include <DHTesp.h>
+#include <DHT.h>
 #include <Preferences.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
@@ -32,7 +32,7 @@ WiFiClientSecure net;
 WiFiClient net;
 #endif
 PubSubClient mqtt(net);
-DHTesp dht;
+DHT dht(PIN_DHT, DHT22);
 Preferences prefs;
 EdgeFilter filter;
 ReportPolicy policy;
@@ -44,6 +44,7 @@ bool actuator = false;
 bool failsafe = false;  // atuador ligado pela própria borda, sem a nuvem
 unsigned long lastSample = 0, lastMqttTry = 0, mqttDownSince = 0, mqttRetryMs = 2000;
 float lastRawT = NAN, lastRawH = NAN;
+int sensorErrors = 0;
 String executed[10];  // últimos comandos executados (evita repetir em reentregas QoS 1)
 int executedHead = 0;
 
@@ -164,14 +165,16 @@ void ensureMqtt(unsigned long now) {
 // ---------- ciclo de medição ----------
 
 void sampleAndPublish(unsigned long now) {
-  TempAndHumidity r = dht.getTempAndHumidity();
-  if (dht.getStatus() == DHTesp::ERROR_NONE) {
-    lastRawT = r.temperature;
-    lastRawH = r.humidity;
-    filter.add(r.temperature, r.humidity);
-  } else {
-    filter.add(NAN, NAN);  // conta como descarte
+  float rawT = dht.readTemperature();
+  float rawH = dht.readHumidity();
+  if (!isnan(rawT) && !isnan(rawH)) {
+    sensorErrors = 0;
+    lastRawT = rawT;
+    lastRawH = rawH;
+  } else if (++sensorErrors % 5 == 1) {
+    Serial.printf("Falha ao ler o DHT22 (%d seguidas). Verifique a ligação no GPIO %d.\n", sensorErrors, PIN_DHT);
   }
+  filter.add(rawT, rawH);  // leituras inválidas são contadas como descarte
   if (!filter.ready()) return;
   float t = filter.avgT(), h = filter.avgH();
 
@@ -218,7 +221,7 @@ void setup() {
   pinMode(PIN_ALARM, OUTPUT);
   setActuator(false);
   digitalWrite(PIN_ALARM, LOW);
-  dht.setup(PIN_DHT, DHTesp::DHT22);
+  dht.begin();
   loadLimits();
 
   char id[17];
