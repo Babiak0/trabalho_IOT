@@ -1,0 +1,49 @@
+# Produção (VPS): PostgreSQL + back-end. O broker é gerenciado (HiveMQ Cloud) e o acesso
+# público passa por Cloudflare -> Nginx (TLS) -> 127.0.0.1:18080. Nenhuma porta é exposta.
+#   docker compose -f docker-compose.prod.yml up -d --build
+name: iot-aps
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: iot
+      POSTGRES_USER: iot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iot -d iot"]
+      interval: 5s
+      retries: 10
+    logging: &logging
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://iot:${POSTGRES_PASSWORD}@postgres:5432/iot?sslmode=disable
+      MQTT_URL: ${MQTT_URL:?defina MQTT_URL no .env}
+      MQTT_USERNAME: ${MQTT_USERNAME:?defina MQTT_USERNAME no .env}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:?defina MQTT_PASSWORD no .env}
+      MQTT_TOPIC_PREFIX: ambiente
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      DASHBOARD_USER: ${DASHBOARD_USER:?defina DASHBOARD_USER no .env}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:?defina DASHBOARD_PASSWORD no .env}
+      ALERT_SAMPLES: ${ALERT_SAMPLES:-3}
+      ALERT_REMINDER: ${ALERT_REMINDER:-5m}
+      DEVICE_STALE_AFTER: ${DEVICE_STALE_AFTER:-30s}
+      TZ: America/Sao_Paulo
+    ports:
+      - "127.0.0.1:18080:8080"
+    logging: *logging
+
+volumes:
+  pgdata:

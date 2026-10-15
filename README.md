@@ -52,6 +52,21 @@ go run ./cmd/simulator -pass <SIM_PASSWORD do .env> -t 24
 Testes: `go test ./...` e, para a lógica de borda do firmware,
 `c++ -std=c++17 -Ifirmware/esp32/src firmware/esp32/test/edge_test.cpp -o /tmp/edge && /tmp/edge`.
 
+## Deploy na VPS
+
+Produção usa `docker-compose.prod.yml` (PostgreSQL + back-end, sem Mosquitto: o broker é o HiveMQ Cloud).
+O app escuta só em `127.0.0.1:18080`; o acesso público passa por Cloudflare (proxy, DNS) → Nginx (TLS) → app.
+
+```bash
+# no computador: envia os arquivos versionados (sem .env e sem metadados do macOS)
+git ls-files -z | COPYFILE_DISABLE=1 tar --no-xattrs --null -T - -czf - | ssh <vps> 'tar -xzf - -C /opt/iot-aps'
+# na VPS: crie /opt/iot-aps/.env (chmod 600) com as variáveis do compose de produção e suba
+cd /opt/iot-aps && docker compose -f docker-compose.prod.yml up -d --build
+```
+
+O painel em produção exige login (`DASHBOARD_USER`/`DASHBOARD_PASSWORD`). Rode apenas **um** back-end por bot do
+Telegram e por broker: duas instâncias disputam os comandos do bot e duplicam alertas.
+
 ## Tópicos MQTT
 
 | Tópico | Sentido | QoS | Conteúdo |
