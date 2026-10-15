@@ -50,8 +50,8 @@ type Service struct {
 	configDirty map[string]bool // dispositivos cujos limites ainda não foram publicados
 }
 
-func New(cfg config.Config, st *store.Store, bot *telegram.Bot) *Service {
-	return &Service{
+func New(ctx context.Context, cfg config.Config, st *store.Store, bot *telegram.Bot) (*Service, error) {
+	s := &Service{
 		cfg:   cfg,
 		store: st,
 		bot:   bot,
@@ -63,6 +63,18 @@ func New(cfg config.Config, st *store.Store, bot *telegram.Bot) *Service {
 		failsafe:    map[string]bool{},
 		configDirty: map[string]bool{},
 	}
+	// Restaura os alertas ativos antes de processar qualquer mensagem MQTT.
+	states, err := st.ActiveAlerts(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("carregar estado dos alertas: %w", err)
+	}
+	for _, a := range states {
+		s.engine.Restore(a.DeviceID, a.Kind, a.LastNotified)
+	}
+	if len(states) > 0 {
+		slog.Info("alertas ativos restaurados", "quantidade", len(states))
+	}
+	return s, nil
 }
 
 // SetPublisher é chamado depois de criar o cliente MQTT (que precisa do HandleMQTT).
@@ -134,6 +146,15 @@ func (s *Service) ingest(ctx context.Context, deviceID string, payload []byte) e
 	}
 	for _, ev := range s.engine.Evaluate(dev.ID, dev.Name, r, dev.Limits, now) {
 		s.raise(ctx, dev.ID, ev.Kind, ev.Severity, ev.Message)
+		var err error
+		if ev.Kind == domain.AlertNormalized {
+			err = s.store.ClearAlert(ctx, dev.ID, ev.Condition)
+		} else {
+			err = s.store.SetAlertActive(ctx, dev.ID, ev.Condition, now)
+		}
+		if err != nil {
+			slog.Error("falha ao salvar estado do alerta", "erro", err)
+		}
 	}
 	return nil
 }
@@ -262,6 +283,9 @@ func (s *Service) SetLimits(ctx context.Context, deviceID string, l domain.Limit
 		return err
 	}
 	s.engine.Reset(deviceID)
+	if err := s.store.ClearAlerts(ctx, deviceID); err != nil {
+		slog.Error("falha ao limpar estado dos alertas", "erro", err)
+	}
 	s.markConfigDirty(deviceID)
 	s.publishConfigs(ctx)
 	return nil
