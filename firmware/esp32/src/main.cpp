@@ -240,7 +240,7 @@ void setup() {
   mqtt.setServer(MQTT_HOST, MQTT_PORT);
   mqtt.setCallback(onMessage);
   mqtt.setBufferSize(512);
-  mqtt.setKeepAlive(15);
+  mqtt.setKeepAlive(30);  // tolera lentidão (ex.: simulação no Wokwi); quedas reais o back-end detecta pela falta de telemetria
   mqtt.setSocketTimeout(5);
   Serial.printf("Dispositivo %s (fw %s) iniciado\n", DEVICE_ID, FW_VERSION);
 }
