@@ -7,6 +7,7 @@ cd "$(dirname "$0")/.."
 mkdir -p wokwi-bundle
 {
   echo "// Gerado por tools/bundle-wokwi.sh - NÃO commitar (contém senhas)."
+  echo "#define HARDWARE_WOKWI  // DHT22 e LEDs nos GPIO 18/19, como no diagram.json"
   echo "// ===== secrets.h ====="
   grep -v '#pragma once' include/secrets.h
   echo
