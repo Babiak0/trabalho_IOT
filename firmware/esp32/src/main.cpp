@@ -1,9 +1,9 @@
-// Firmware do ESP32: DHT22 -> processamento na borda -> MQTT (TLS) -> nuvem, e comandos de volta.
+// Firmware do ESP32: sensor DHT -> processamento na borda -> MQTT (TLS) -> nuvem, e comandos de volta.
 //
-// Hardware:
-//   DHT22 dados .......... GPIO 4
-//   Ventilação (relé/LED)  GPIO 18   atuador controlado pela nuvem
-//   Alarme local (LED)     GPIO 19   aceso quando a borda detecta valor fora dos limites
+// Hardware (placa física, padrão)           Wokwi (compilar com -DHARDWARE_WOKWI)
+//   DHT11 dados ........... GPIO 4            DHT22 dados ........ GPIO 4
+//   Ventilação (LED verde)  GPIO 26           Ventilação ......... GPIO 18
+//   Alarme local (LED verm.) GPIO 25          Alarme local ....... GPIO 19
 //
 // Tópicos: ambiente/<DEVICE_ID>/{telemetry,status,ack} (publica) e {cmd,config} (assina).
 #include <Arduino.h>
@@ -18,12 +18,21 @@
 #include "edge.h"
 #include "secrets.h"
 
-#define FW_VERSION "1.0.0"
+#define FW_VERSION "1.1.0"
 
 const int PIN_DHT = 4;
+#ifdef HARDWARE_WOKWI
 const int PIN_ACTUATOR = 18;
 const int PIN_ALARM = 19;
-const unsigned long SAMPLE_MS = 2000;      // o DHT22 aceita no máximo 1 leitura a cada 2 s
+#define DHT_TYPE DHT22
+#define HARDWARE_NAME "Wokwi (DHT22)"
+#else
+const int PIN_ACTUATOR = 26;
+const int PIN_ALARM = 25;
+#define DHT_TYPE DHT11
+#define HARDWARE_NAME "placa física (DHT11)"
+#endif
+const unsigned long SAMPLE_MS = 2000;      // respeita o intervalo mínimo do DHT11 (1 s) e do DHT22 (2 s)
 const unsigned long FAILSAFE_MS = 30000;   // sem nuvem por esse tempo -> borda assume o controle
 
 #if MQTT_USE_TLS
@@ -32,7 +41,7 @@ WiFiClientSecure net;
 WiFiClient net;
 #endif
 PubSubClient mqtt(net);
-DHT dht(PIN_DHT, DHT22);
+DHT dht(PIN_DHT, DHT_TYPE);
 Preferences prefs;
 EdgeFilter filter;
 ReportPolicy policy;
@@ -172,7 +181,7 @@ void sampleAndPublish(unsigned long now) {
     lastRawT = rawT;
     lastRawH = rawH;
   } else if (++sensorErrors % 5 == 1) {
-    Serial.printf("Falha ao ler o DHT22 (%d seguidas). Verifique a ligação no GPIO %d.\n", sensorErrors, PIN_DHT);
+    Serial.printf("Falha ao ler o sensor DHT (%d seguidas). Verifique a ligação no GPIO %d.\n", sensorErrors, PIN_DHT);
   }
   filter.add(rawT, rawH);  // leituras inválidas são contadas como descarte
   if (!filter.ready()) return;
@@ -242,7 +251,7 @@ void setup() {
   mqtt.setBufferSize(512);
   mqtt.setKeepAlive(30);  // tolera lentidão (ex.: simulação no Wokwi); quedas reais o back-end detecta pela falta de telemetria
   mqtt.setSocketTimeout(5);
-  Serial.printf("Dispositivo %s (fw %s) iniciado\n", DEVICE_ID, FW_VERSION);
+  Serial.printf("Dispositivo %s (fw %s, %s) iniciado\n", DEVICE_ID, FW_VERSION, HARDWARE_NAME);
 }
 
 void loop() {
