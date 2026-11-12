@@ -6,7 +6,7 @@ Projeto final da disciplina *Arquitetura de Sistemas IoT e Computação em Nuvem
 ```mermaid
 flowchart LR
   subgraph Borda
-    DHT[DHT22] --> ESP[ESP32 · C++<br/>validação, média móvel,<br/>rejeição de picos,<br/>alarme local, modo de segurança]
+    DHT[DHT11 / DHT22] --> ESP[ESP32 · C++<br/>validação, média móvel,<br/>rejeição de picos,<br/>alarme local, modo de segurança]
     ESP --> FAN[Ventilação<br/>relé/LED]
     ESP --> ALM[LED de alarme]
   end
@@ -99,22 +99,34 @@ Clusters já existentes continuam funcionando até lá; alternativa gratuita equ
 
 ## ESP32
 
-**Montagem física:** DHT22 (dados no GPIO 4 com pull-up de 10 kΩ, VCC 3V3), módulo relé ou LED + 220 Ω no GPIO 18 (ventilação), LED + 220 Ω no GPIO 19 (alarme).
+**Montagem física (placa usada no projeto):** ESP32 DevKit V1 (30 pinos), módulo DHT11 de 3 pinos (S → GPIO 4,
+\+ → 3V3, − → GND; o módulo já tem pull-up), LED verde + 220 Ω no GPIO 26 (ventilação) e LED vermelho + 220 Ω no
+GPIO 25 (alarme). O mesmo código atende o Wokwi: com `-DHARDWARE_WOKWI` ele usa DHT22 e os GPIO 18/19 do `diagram.json`.
+
+| | Placa física | Wokwi |
+|---|---|---|
+| Ambiente PlatformIO | `esp32dev` (padrão) | `wokwi` |
+| Sensor | DHT11 no GPIO 4 | DHT22 no GPIO 4 |
+| Ventilação / alarme | GPIO 26 / 25 | GPIO 18 / 19 |
 
 ```bash
 cd firmware/esp32
-cp include/secrets.example.h include/secrets.h   # preencha Wi-Fi e broker
-pio run -t upload && pio device monitor
+cp include/secrets.example.h include/secrets.h   # preencha Wi-Fi (2,4 GHz) e broker
+pio run -e esp32dev -t upload && pio device monitor
 ```
 
-**Wokwi (simulação):** no VS Code com a extensão Wokwi, rode `pio run` e abra `diagram.json`.
+**Arduino IDE (alternativa ao PlatformIO):** `./tools/bundle-arduino.sh` monta `arduino-bundle/esp32_ambiente/`
+(fora do git, contém senhas). Instale a placa *esp32* (Espressif) e as bibliotecas PubSubClient, ArduinoJson 7,
+DHT sensor library e Adafruit Unified Sensor; abra `esp32_ambiente.ino`, escolha *ESP32 Dev Module* e grave.
+
+**Wokwi (simulação):** no VS Code com a extensão Wokwi, rode `pio run -e wokwi` e abra `diagram.json`.
 No navegador, gere um arquivo único com `./tools/bundle-wokwi.sh` (dentro de `firmware/esp32`; a saída em
 `wokwi-bundle/` fica fora do git porque contém senhas). Em wokwi.com → novo projeto ESP32 (Arduino), cole o
 `sketch.ino`, o `diagram.json` e crie a aba `libraries.txt`. O Wokwi no navegador só alcança brokers na internet.
 
 ## Processamento na borda (ESP32)
 
-- Validação física das leituras (faixas do DHT22, NaN).
+- Validação física das leituras (faixas do sensor, NaN).
 - Rejeição de picos: saltos > 5 °C / 15 % são descartados, a menos que se repitam 3 vezes (mudança real).
 - Média móvel de 5 amostras (uma a cada 2 s).
 - *Report by exception*: publica quando o valor muda ≥ 0,3 °C / 1 %, a cada 10 s como batimento, ou a cada 2 s em alarme.
