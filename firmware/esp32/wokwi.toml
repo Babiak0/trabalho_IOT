@@ -1,5 +1,5 @@
-# Simulação no VS Code (extensão Wokwi): compile com "pio run" e abra diagram.json.
+# Simulação no VS Code (extensão Wokwi): compile com "pio run -e wokwi" e abra diagram.json.
 [wokwi]
 version = 1
-firmware = ".pio/build/esp32dev/firmware.bin"
-elf = ".pio/build/esp32dev/firmware.elf"
+firmware = ".pio/build/wokwi/firmware.bin"
+elf = ".pio/build/wokwi/firmware.elf"
